@@ -4,3 +4,4 @@ Useful links:
 	https://rdmilligan.wordpress.com/2016/08/27/opengl-shaders-using-python/
 	https://fileadmin.cs.lth.se/cs/Personal/Calle_Lejdfors/pygpu/
 	https://wiki.python.org/moin/Screencasting
+    https://github.com/tito/pymt/blob/master/pymt/graphx/shader.py
