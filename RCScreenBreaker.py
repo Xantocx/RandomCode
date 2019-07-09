@@ -7,7 +7,6 @@ else:
 
 import wx
 from PIL import Image, ImageTk
-from msvcrt import getch
 from random import randint
 import os
 
