@@ -5,3 +5,6 @@ Useful links:
 	https://fileadmin.cs.lth.se/cs/Personal/Calle_Lejdfors/pygpu/
 	https://wiki.python.org/moin/Screencasting
     https://github.com/tito/pymt/blob/master/pymt/graphx/shader.py
+    http://pyopengl.sourceforge.net/documentation/
+    https://bitbucket.org/rndblnch/opengl-programmable/src/tip/09-gles2.py
+    https://stackoverflow.com/questions/56122387/rendering-image-in-pygame-using-pyopengl
