@@ -64,8 +64,13 @@ def showPIL(root, canvas, pilImage):
 	image = ImageTk.PhotoImage(pilImage)
 	return image, canvas.create_image(w / 2, h / 2, image=image)
 
+#Processors
+
 def processImageBreakingDown(image, lastColVal):
 	pixels = image.load()
+
+	backupImage = image.copy()
+	backupPixels = backupImage.load()
 
 	maxColOffset = randint(15, 30)
 	numCols = maxColOffset * 2 + 1 
@@ -80,7 +85,7 @@ def processImageBreakingDown(image, lastColVal):
 	for col in range(colValue - maxColOffset, colValue + maxColOffset):
 		col = col % (image.size[0] - 1)
 		for row in range(image.size[1] - 1, 0, -1):
-			pixels[col, row] = pixels[col, (row - shift) % (image.size[1] - 1)]
+			pixels[col, row] = backupPixels[col, (row - shift) % (image.size[1] - 1)]
 
 		if lastColVal % 2 == 1:
 			if col <= colValue:
@@ -94,8 +99,6 @@ def processImageBreakingDown(image, lastColVal):
 				shift = shift + 1
 
 	return image, colValue
-
-#Processors
 
 def processImageVortex(image, step):
 	pixels = image.load()

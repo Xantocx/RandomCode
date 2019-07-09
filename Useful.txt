@@ -1,0 +1,6 @@
+Useful links:
+	https://mborgerson.com/creating-an-executable-from-a-python-script/
+	https://python-opengl-examples.blogspot.com/
+	https://rdmilligan.wordpress.com/2016/08/27/opengl-shaders-using-python/
+	https://fileadmin.cs.lth.se/cs/Personal/Calle_Lejdfors/pygpu/
+	https://wiki.python.org/moin/Screencasting
