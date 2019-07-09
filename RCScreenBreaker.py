@@ -1,16 +1,21 @@
 import sys
 if sys.version_info[0] == 2:
-    import Tkinter
-    tkinter = Tkinter
+	import Tkinter
+	tkinter = Tkinter
 else:
-    import tkinter
+	import tkinter
 
 import wx
 from PIL import Image, ImageTk
 from random import randint
 import os
 
+#Setup
+
 app = wx.App()
+running = True
+
+#Image display
 
 def takeScreenshot(name):
 	screen = wx.ScreenDC()
@@ -22,8 +27,10 @@ def takeScreenshot(name):
 	bmp.SaveFile(name, wx.BITMAP_TYPE_PNG)
 
 def callback(event):
-	#not working...
-	sys.exit(0)
+	global running
+	event.widget.withdraw()
+	event.widget.quit()
+	running = False
 
 def createRoot():
 	root = tkinter.Tk()
@@ -31,8 +38,8 @@ def createRoot():
 	root.overrideredirect(1)
 	root.geometry("%dx%d+0+0" % (w, h))
 	root.focus_set()    
-	root.bind("<Escape>", lambda e: (e.widget.withdraw(), e.widget.quit()))
-	#root.bind("<Escape>", callback)
+	#root.bind("<Escape>", lambda e: (e.widget.withdraw(), e.widget.quit()))
+	root.bind("<Escape>", callback)
 
 	return root
 
@@ -87,6 +94,8 @@ def processImageBreakingDown(image, lastColVal):
 				shift = shift + 1
 
 	return image, colValue
+
+#Processors
 
 def processImageVortex(image, step):
 	pixels = image.load()
@@ -165,11 +174,16 @@ def yourImageProcessor(image):
 
 #-------------------------------------------------------------------------------------------#
 
+
+#Mainloop
+
 def update(root):
 	root.update_idletasks()
 	root.update()
 
 def main():
+	global running
+
 	imageName = 'screenshot.png'
 	index = 0
 
@@ -182,14 +196,17 @@ def main():
 	image = pilImage.copy()
 	pilImage.close()
 	os.remove(imageName)
+
 	pilImage = image.copy()
 	original = image.copy()
+
+	image.close()
 
 	image, imagesprite = showPIL(root, canvas, pilImage)
 
 	update(root)
 
-	while True:
+	while running:
 
 		#---> Add your image processor here and comment out all others <---#
 
@@ -207,5 +224,8 @@ def main():
 		image = image2
 
 		update(root)
+
+	root.destroy()
+	pilImage.close()
 
 main()
