@@ -3,4 +3,6 @@ Here I put all the fun scripts I wrote. Currently, there is only the screen brea
 
 Uses the following external packages: wx, PIL, msvcrt
 
-If you want to create an exe from the code, install pyinstaller and run "pyinstaller.exe --onefile --windowed RCScreenBreaker.py"
+If you want to create an exe from the code, install pyinstaller and run "pyinstaller --onefile --windowed RCScreenBreaker.py"
+
+Now worries, it does NOT actually damage your screen :)
