@@ -4,8 +4,8 @@ from OpenGL.GL import *
 from OpenGL.GL import shaders
 import numpy as np
 from ctypes import sizeof, c_float, c_void_p
-import os
 import time
+from PIL import Image
 
 #setup pygame
 pygame.init()
@@ -47,7 +47,7 @@ void main() {
 """
 
 
-def takeScreenshot(name):
+def takeScreenshot():
     screen = wx.ScreenDC()
     size = screen.GetSize()
 
@@ -55,11 +55,14 @@ def takeScreenshot(name):
     mem = wx.MemoryDC(bmp)
     mem.Blit(0, 0, size[0], size[1], screen, 0, 0)
     del mem
-    bmp.SaveFile(name, wx.BITMAP_TYPE_PNG)
 
-    image = pygame.image.load(name)
-    os.remove(name)
+    image = pygame.image.frombuffer(bmp.ConvertToImage().GetData(), size, "RGB")
+
     return image
+
+def pygame2PIL(image):
+    imageData = pygame.image.tostring(image, "RGBA", True)
+    return Image.frombytes("RGBA", image.get_width(), image.get_height(), imageData)
 
 def createProgram(image):
     global vertexShaderSource, fragmentShaderSource
@@ -101,22 +104,22 @@ def createProgram(image):
 
     return shaderProgram
 
-def render(program, value):
+def render(program, values):
     glUseProgram(program)
 
     zValuePos = glGetUniformLocation(program, "zValue")
-    glUniform1f(zValuePos, value)
+    glUniform1f(zValuePos, values[0])
 
     glDrawArrays(GL_TRIANGLES, 0, 6)
 
-def renderImage(program, image, value):
+def renderImage(program, image, values):
     width = image.get_width()
     height = image.get_height()
-    imageData = pygame.image.tostring(image, "RGBA", True)
     mipMapLevel = 0
 
+    imageData = pygame.image.tostring(image, "RGBA", True)
+
     texPos = glGetUniformLocation(program, "tex")
-    zValuePos = glGetUniformLocation(program, "zValue")
 
     imageTexture = glGenTextures(1)
     glBindTexture(GL_TEXTURE_2D, imageTexture)
@@ -127,32 +130,32 @@ def renderImage(program, image, value):
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
 
     glUniform1i(texPos, 0)
-    glUniform1f(zValuePos, value)
 
-    glDrawArrays(GL_TRIANGLES, 0, 6)
+    render(program, values)
 
 def main():
     global running
 
-    imageName = 'screenshot.png'
-
-    image = takeScreenshot(imageName)
-    original = image.copy()
-
+    image = takeScreenshot()
+    currentImage = image
     backup = pygame.image.load("Background.jpg")
 
     width = image.get_width()
     height = image.get_height()
+    size = (width, height)
 
     glViewport(0, 0, width, height)
 
-    i = 0
-
     program = createProgram(image)
+
+    values = [0]
+
+    render(program, values)
 
     timeArray = []
 
     while running:
+        t1 = time.perf_counter()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -161,24 +164,32 @@ def main():
                 if event.key == pygame.K_ESCAPE: # or event.unicode == 'q':
                     running = False
 
-        t1 = time.clock()
-
-        if i < 0.2:
-            render(program, i)
+        if values[0] < 0.2:
+            render(program, values)
         else:
-            renderImage(program, backup, i)
+            renderImage(program, backup, values)
 
-        t2 = time.clock()
-        timeArray.append(t2 - t1)
+        #renderImage(program, currentImage, values)
+
+        surface = pygame.display.get_surface()
+        currentImage = pygame.image.frombuffer(surface.get_buffer(), surface.get_size(), "RGBA") #different thread, so I cannot contol it
+        
+        #currentScreen = glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE)
+        #currentPILImage = Image.frombuffer("RGBA", size, currentScreen, "raw", "RGBA", 0, 0).rotate(180)
+        #currentImage = pygame.image.frombuffer(currentPILImage.getdata(), size, "RGBA", True)
 
         pygame.display.flip()
 
-        i = i + 0.001
+        values[0] = values[0] + 0.001
+
+        t2 = time.perf_counter()
+        timeArray.append(t2 - t1)
 
     tAll = 0
     for t in timeArray:
         tAll= tAll + t
-    print(tAll/len(timeArray))
+    print()
+    print(tAll / len(timeArray))
 
     pygame.quit()
 
