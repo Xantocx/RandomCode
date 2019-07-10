@@ -5,6 +5,7 @@ from OpenGL.GL import shaders
 import numpy as np
 from ctypes import sizeof, c_float, c_void_p
 import os
+import time
 
 #setup pygame
 pygame.init()
@@ -34,13 +35,14 @@ fragmentShaderSource = """
 #version 330
 
 uniform sampler2D tex;
+uniform float zValue;
 
 in vec2 uv;
 
 out vec4 fragColor;
 
 void main() {
-    fragColor = vec4(texture(tex, uv).xy, 0.0, 1.0);
+    fragColor = vec4(texture(tex, uv).xy, zValue, 1.0);
 }
 """
 
@@ -59,7 +61,7 @@ def takeScreenshot(name):
     os.remove(name)
     return image
 
-def renderImage(image):
+def createProgram(image):
     global vertexShaderSource, fragmentShaderSource
 
     width = image.get_width()
@@ -78,7 +80,7 @@ def renderImage(image):
 
     glVertexAttribPointer(vertexPositionAttributeLocation, 2, GL_FLOAT, GL_FALSE, sizeof(c_float) * 4, c_void_p(0))
     glEnableVertexAttribArray(0)
-    glVertexAttribPointer(uvAttributeLocation, 2, GL_FLOAT, GL_FALSE, sizeof(c_float)*4, c_void_p(sizeof(c_float) * 2))
+    glVertexAttribPointer(uvAttributeLocation, 2, GL_FLOAT, GL_FALSE, sizeof(c_float) * 4, c_void_p(sizeof(c_float) * 2))
     glEnableVertexAttribArray(1)
 
     imageTexture = glGenTextures(1)
@@ -97,9 +99,37 @@ def renderImage(image):
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
-    glUseProgram(shaderProgram)
+    return shaderProgram
 
-    glDrawArrays(GL_TRIANGLES, 0, 3)
+def render(program, value):
+    glUseProgram(program)
+
+    zValuePos = glGetUniformLocation(program, "zValue")
+    glUniform1f(zValuePos, value)
+
+    glDrawArrays(GL_TRIANGLES, 0, 6)
+
+def renderImage(program, image, value):
+    width = image.get_width()
+    height = image.get_height()
+    imageData = pygame.image.tostring(image, "RGBA", True)
+    mipMapLevel = 0
+
+    texPos = glGetUniformLocation(program, "tex")
+    zValuePos = glGetUniformLocation(program, "zValue")
+
+    imageTexture = glGenTextures(1)
+    glBindTexture(GL_TEXTURE_2D, imageTexture)
+
+    glTexImage2D(GL_TEXTURE_2D, mipMapLevel, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, imageData)
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+
+    glUniform1i(texPos, 0)
+    glUniform1f(zValuePos, value)
+
+    glDrawArrays(GL_TRIANGLES, 0, 6)
 
 def main():
     global running
@@ -109,20 +139,20 @@ def main():
     image = takeScreenshot(imageName)
     original = image.copy()
 
-    #image = pygame.image.load("Background.jpg")
+    backup = pygame.image.load("Background.jpg")
 
     width = image.get_width()
     height = image.get_height()
 
     glViewport(0, 0, width, height)
 
-    #renderImage(image)
-    #pygame.display.flip()
+    i = 0
+
+    program = createProgram(image)
+
+    timeArray = []
 
     while running:
-
-        renderImage(image)
-        pygame.display.flip()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -130,6 +160,25 @@ def main():
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE: # or event.unicode == 'q':
                     running = False
+
+        t1 = time.clock()
+
+        if i < 0.2:
+            render(program, i)
+        else:
+            renderImage(program, backup, i)
+
+        t2 = time.clock()
+        timeArray.append(t2 - t1)
+
+        pygame.display.flip()
+
+        i = i + 0.001
+
+    tAll = 0
+    for t in timeArray:
+        tAll= tAll + t
+    print(tAll/len(timeArray))
 
     pygame.quit()
 
