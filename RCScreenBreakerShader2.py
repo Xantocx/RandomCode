@@ -6,6 +6,7 @@ import numpy as np
 from ctypes import sizeof, c_float, c_void_p
 import time
 from PIL import Image
+from multiprocessing.pool import ThreadPool
 
 #setup pygame
 pygame.init()
@@ -112,19 +113,15 @@ def render(program, values):
 
     glDrawArrays(GL_TRIANGLES, 0, 6)
 
-def renderImage(program, image, values):
-    width = image.get_width()
-    height = image.get_height()
+def renderBuffer(program, buf, size, values):
     mipMapLevel = 0
-
-    imageData = pygame.image.tostring(image, "RGBA", True)
 
     texPos = glGetUniformLocation(program, "tex")
 
     imageTexture = glGenTextures(1)
     glBindTexture(GL_TEXTURE_2D, imageTexture)
 
-    glTexImage2D(GL_TEXTURE_2D, mipMapLevel, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, imageData)
+    glTexImage2D(GL_TEXTURE_2D, mipMapLevel, GL_RGBA, size[0], size[1], 0, GL_RGBA, GL_UNSIGNED_BYTE, buf)
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
@@ -133,12 +130,21 @@ def renderImage(program, image, values):
 
     render(program, values)
 
+def renderImage(program, image, values):
+    size = (image.get_width(), image.get_height())
+    buf = pygame.image.tostring(image, "RGBA", True)
+
+    renderBuffer(program, buf, size, values)
+
 def main():
     global running
 
     image = takeScreenshot()
     currentImage = image
+    currentBuffer = pygame.image.tostring(image, "RGBA", True)
+    
     backup = pygame.image.load("Background.jpg")
+    #currentBuffer = pygame.image.tostring(backup, "RGBA", True)
 
     width = image.get_width()
     height = image.get_height()
@@ -164,19 +170,18 @@ def main():
                 if event.key == pygame.K_ESCAPE: # or event.unicode == 'q':
                     running = False
 
-        if values[0] < 0.2:
-            render(program, values)
-        else:
-            renderImage(program, backup, values)
+        #if values[0] < 0.2:
+        #    render(program, values)
+        #else:
+        #    renderImage(program, backup, values)
 
-        #renderImage(program, currentImage, values)
+        #render(program, values)
 
-        surface = pygame.display.get_surface()
-        currentImage = pygame.image.frombuffer(surface.get_buffer(), surface.get_size(), "RGBA") #different thread, so I cannot contol it
-        
-        #currentScreen = glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE)
-        #currentPILImage = Image.frombuffer("RGBA", size, currentScreen, "raw", "RGBA", 0, 0).rotate(180)
-        #currentImage = pygame.image.frombuffer(currentPILImage.getdata(), size, "RGBA", True)
+        #renderImage(program, backup, values)
+
+        renderBuffer(program, currentBuffer, size, values)
+
+        currentBuffer = glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE)
 
         pygame.display.flip()
 
@@ -184,6 +189,7 @@ def main():
 
         t2 = time.perf_counter()
         timeArray.append(t2 - t1)
+
 
     tAll = 0
     for t in timeArray:
