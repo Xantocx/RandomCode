@@ -4,9 +4,8 @@ from OpenGL.GL import *
 from OpenGL.GL import shaders
 import numpy as np
 from ctypes import sizeof, c_float, c_void_p
+from random import randint
 import time
-from PIL import Image
-from multiprocessing.pool import ThreadPool
 
 #setup pygame
 pygame.init()
@@ -18,6 +17,7 @@ app = wx.App()
 #global variables
 running = True
 
+
 vertexShaderSource = """
 #version 330
 
@@ -27,8 +27,8 @@ layout(location = 1) in vec2 uvIn;
 out vec2 uv;
 
 void main() {
-    gl_Position = vec4(pos, 0, 1);
-    uv = uvIn;
+	gl_Position = vec4(pos, 0, 1);
+	uv = uvIn;
 }
 """
 
@@ -36,168 +36,242 @@ fragmentShaderSource = """
 #version 330
 
 uniform sampler2D tex;
-uniform float zValue;
+uniform float colPos;
+uniform float colOffset;
+uniform float rowOffset;
+uniform vec2 size;
 
 in vec2 uv;
 
 out vec4 fragColor;
 
 void main() {
-    fragColor = vec4(texture(tex, uv).xy, zValue, 1.0);
+	if (uv.x >= colPos / size.x && uv.x < (colPos + colOffset) / size.x) {
+		fragColor = texture(tex, vec2(uv.x, mod(uv.y + (rowOffset / size.y), size.y)));
+		//fragColor = vec4(1.0);
+	} else {
+		fragColor = texture(tex, uv);
+		//fragColor = vec4(0.0);
+	}
 }
 """
 
 
 def takeScreenshot():
-    screen = wx.ScreenDC()
-    size = screen.GetSize()
+	screen = wx.ScreenDC()
+	size = screen.GetSize()
 
-    bmp = wx.Bitmap(size[0], size[1])
-    mem = wx.MemoryDC(bmp)
-    mem.Blit(0, 0, size[0], size[1], screen, 0, 0)
-    del mem
+	bmp = wx.Bitmap(size[0], size[1])
+	mem = wx.MemoryDC(bmp)
+	mem.Blit(0, 0, size[0], size[1], screen, 0, 0)
+	del mem
 
-    image = pygame.image.frombuffer(bmp.ConvertToImage().GetData(), size, "RGB")
+	image = pygame.image.frombuffer(bmp.ConvertToImage().GetData(), size, "RGB")
 
-    return image
+	return image
 
-def pygame2PIL(image):
-    imageData = pygame.image.tostring(image, "RGBA", True)
-    return Image.frombytes("RGBA", image.get_width(), image.get_height(), imageData)
+def createProgram(image, vertexShaderSource, fragmentShaderSource):
 
-def createProgram(image):
-    global vertexShaderSource, fragmentShaderSource
+	width = image.get_width()
+	height = image.get_height()
+	imageData = pygame.image.tostring(image, "RGBA", True)
+	
+	vertexPositionAttributeLocation = 0
+	uvAttributeLocation = 1
+	mipMapLevel = 0
 
-    width = image.get_width()
-    height = image.get_height()
-    imageData = pygame.image.tostring(image, "RGBA", True)
-    
-    vertexPositionAttributeLocation = 0
-    uvAttributeLocation = 1
-    mipMapLevel = 0
+	vbo = glGenBuffers(1)
+	glBindBuffer(GL_ARRAY_BUFFER, vbo)
 
-    vbo = glGenBuffers(1)
-    glBindBuffer(GL_ARRAY_BUFFER, vbo)
+	vertexData = np.array([-1, -1, 0, 0,  -1, 1, 0, 1,  1, 1, 1, 1,  -1, -1, 0, 0,  1, 1, 1, 1,  1, -1, 1, 0], np.float32)
+	glBufferData(GL_ARRAY_BUFFER, vertexData, GL_STATIC_DRAW)
 
-    vertexData = np.array([-1, -1, 0, 0,  -1, 1, 0, 1,  1, 1, 1, 1,  -1, -1, 0, 0,  1, 1, 1, 1,  1, -1, 1, 0], np.float32)
-    glBufferData(GL_ARRAY_BUFFER, vertexData, GL_STATIC_DRAW)
+	glVertexAttribPointer(vertexPositionAttributeLocation, 2, GL_FLOAT, GL_FALSE, sizeof(c_float) * 4, c_void_p(0))
+	glEnableVertexAttribArray(0)
+	glVertexAttribPointer(uvAttributeLocation, 2, GL_FLOAT, GL_FALSE, sizeof(c_float) * 4, c_void_p(sizeof(c_float) * 2))
+	glEnableVertexAttribArray(1)
 
-    glVertexAttribPointer(vertexPositionAttributeLocation, 2, GL_FLOAT, GL_FALSE, sizeof(c_float) * 4, c_void_p(0))
-    glEnableVertexAttribArray(0)
-    glVertexAttribPointer(uvAttributeLocation, 2, GL_FLOAT, GL_FALSE, sizeof(c_float) * 4, c_void_p(sizeof(c_float) * 2))
-    glEnableVertexAttribArray(1)
+	imageTexture = glGenTextures(1)
+	glBindTexture(GL_TEXTURE_2D, imageTexture)
 
-    imageTexture = glGenTextures(1)
-    glBindTexture(GL_TEXTURE_2D, imageTexture)
+	glTexImage2D(GL_TEXTURE_2D, mipMapLevel, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, imageData)
 
-    glTexImage2D(GL_TEXTURE_2D, mipMapLevel, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, imageData)
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+	vertexShader = shaders.compileShader(vertexShaderSource, GL_VERTEX_SHADER)
+	fragmentShader = shaders.compileShader(fragmentShaderSource, GL_FRAGMENT_SHADER)
 
-    vertexShader = shaders.compileShader(vertexShaderSource, GL_VERTEX_SHADER)
-    fragmentShader = shaders.compileShader(fragmentShaderSource, GL_FRAGMENT_SHADER)
+	shaderProgram = shaders.compileProgram(vertexShader, fragmentShader)
 
-    shaderProgram = shaders.compileProgram(vertexShader, fragmentShader)
+	glEnable(GL_BLEND)
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
-    glEnable(GL_BLEND)
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+	return shaderProgram, imageTexture
 
-    return shaderProgram
+def render(program, args):
+	glUseProgram(program)
 
-def render(program, values):
-    glUseProgram(program)
+	colPosPos = glGetUniformLocation(program, "colPos")
+	colOffsetPos = glGetUniformLocation(program, "colOffset")
+	rowOffsetPos = glGetUniformLocation(program, "rowOffset")
+	sizePos = glGetUniformLocation(program, "size")
 
-    zValuePos = glGetUniformLocation(program, "zValue")
-    glUniform1f(zValuePos, values[0])
+	glUniform1f(colPosPos, args[0])
+	glUniform1f(colOffsetPos, args[1])
+	glUniform1f(rowOffsetPos, args[2])
+	glUniform2f(sizePos, args[3], args[4])
 
-    glDrawArrays(GL_TRIANGLES, 0, 6)
+	glDrawArrays(GL_TRIANGLES, 0, 6)
 
-def renderBuffer(program, buf, size, values):
-    mipMapLevel = 0
+def renderBuffer(program, buf, size, args):
+	mipMapLevel = 0
 
-    texPos = glGetUniformLocation(program, "tex")
+	texPos = glGetUniformLocation(program, "tex")
 
-    imageTexture = glGenTextures(1)
-    glBindTexture(GL_TEXTURE_2D, imageTexture)
+	imageTexture = glGenTextures(1)
+	glBindTexture(GL_TEXTURE_2D, imageTexture)
 
-    glTexImage2D(GL_TEXTURE_2D, mipMapLevel, GL_RGBA, size[0], size[1], 0, GL_RGBA, GL_UNSIGNED_BYTE, buf)
+	glTexImage2D(GL_TEXTURE_2D, mipMapLevel, GL_RGBA, size[0], size[1], 0, GL_RGBA, GL_UNSIGNED_BYTE, buf)
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
 
-    glUniform1i(texPos, 0)
+	glUniform1i(texPos, 0)
 
-    render(program, values)
+	render(program, args)
 
-def renderImage(program, image, values):
-    size = (image.get_width(), image.get_height())
-    buf = pygame.image.tostring(image, "RGBA", True)
+	glDeleteTextures(imageTexture)
 
-    renderBuffer(program, buf, size, values)
+def renderImage(program, image, args):
+	size = (image.get_width(), image.get_height())
+	buf = pygame.image.tostring(image, "RGBA", True)
+
+	renderBuffer(program, buf, size, args)	
+
+def mainloop(identifier, args, size, buf=None):
+	global running
+
+	width = size[0]
+	height = size[1]
+	usesBuffer = buf is not None
+
+	possibles = globals().copy()
+	possibles.update(locals())
+	loop = possibles.get(identifier)
+	if not loop:
+		raise NotImplementedError("Method %s not implemented" % loop)
+
+	timeArray = []
+
+	while running:
+
+		t1 = time.perf_counter()
+
+		for event in pygame.event.get():
+			if event.type == pygame.QUIT:
+				running = False
+			elif event.type == pygame.KEYDOWN:
+				if event.key == pygame.K_ESCAPE: # or event.unicode == 'q':
+					running = False
+
+		if usesBuffer:
+			loop(buf, args)
+			buf = glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE)
+			#buf = pygame.display.get_surface().get_buffer().raw #may be a faster option, currently doesn't work
+		else:
+			loop(args)
+		pygame.display.flip()
+
+		t2 = time.perf_counter()
+		timeArray.append(t2 - t1)
+
+	tAll = 0
+	for t in timeArray:
+		tAll= tAll + t
+	print()
+	print(str(len(timeArray)) + " runs")
+	print("average time per run: " + str(tAll / len(timeArray)))
+
+	running = True
+
+def demo1(args):
+	program = args[0]
+	size = args[1]
+	image = args[2]
+	values = args[3]
+
+	values[0] = (values[0] + values[1]) % size[0]
+	values[1] = randint(30, 50)
+	values[2] = randint(50, 100)
+
+	renderImage(program, image, values)
+	#time.sleep(0.15)
+
+def demo2(buf, args):
+	program = args[0]
+	size = args[1]
+	values = args[2]
+
+	values[0] = (values[0] + values[1]) % size[0]
+	values[1] = randint(30, 50)
+	values[2] = randint(50, 100)
+
+	renderBuffer(program, buf, size, values)
+	#time.sleep(0.15)
+
+def static(args):
+	program = args[0]
+	size = args[1]
+	values = args[2]
+
+	values[0] = (values[0] + values[1]) % size[0]
+	values[1] = randint(30, 50)
+	values[2] = randint(50, 100)
+
+	render(program, values)
+	#time.sleep(0.15)
+
+def refreshing(buf, args):
+	program = args[0]
+	size = args[1]
+	values = args[2]
+
+	values[0] = (values[0] + values[1]) % size[0]
+	values[1] = randint(30, 50)
+	values[2] = randint(50, 100)
+
+	renderBuffer(program, buf, size, values)
+	#time.sleep(0.15)
 
 def main():
-    global running
+	global running, vertexShaderSource, fragmentShaderSource
 
-    image = takeScreenshot()
-    currentImage = image
-    currentBuffer = pygame.image.tostring(image, "RGBA", True)
-    
-    backup = pygame.image.load("Background.jpg")
-    #currentBuffer = pygame.image.tostring(backup, "RGBA", True)
+	image = takeScreenshot()
+	buf = pygame.image.tostring(image, "RGBA", True)
+	
+	backup = pygame.image.load("Background.jpg")
+	backupBuf = pygame.image.tostring(backup, "RGBA", True)
 
-    width = image.get_width()
-    height = image.get_height()
-    size = (width, height)
+	width = image.get_width()
+	height = image.get_height()
+	size = (width, height)
 
-    glViewport(0, 0, width, height)
+	args = [0, 0, 0, width, height] #column number, column offset, row offset, width, height
 
-    program = createProgram(image)
+	glViewport(0, 0, width, height)
 
-    values = [0]
+	program, texture = createProgram(image, vertexShaderSource, fragmentShaderSource)
+	render(program, args)
 
-    render(program, values)
+	mainloop("demo1", (program, size, backup, args), size)
+	mainloop("demo2", (program, size, args), size, backupBuf)
+	#mainloop("static", (program, size, args), size)
+	#mainloop("refreshing", (program, size, args), size, buf)
 
-    timeArray = []
-
-    while running:
-        t1 = time.perf_counter()
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE: # or event.unicode == 'q':
-                    running = False
-
-        #if values[0] < 0.2:
-        #    render(program, values)
-        #else:
-        #    renderImage(program, backup, values)
-
-        #render(program, values)
-
-        #renderImage(program, backup, values)
-
-        renderBuffer(program, currentBuffer, size, values)
-
-        currentBuffer = glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE)
-
-        pygame.display.flip()
-
-        values[0] = values[0] + 0.001
-
-        t2 = time.perf_counter()
-        timeArray.append(t2 - t1)
-
-
-    tAll = 0
-    for t in timeArray:
-        tAll= tAll + t
-    print()
-    print(tAll / len(timeArray))
-
-    pygame.quit()
+	glDeleteProgram(program)
+	glDeleteTextures(texture)
+	pygame.quit()
 
 
 main()
