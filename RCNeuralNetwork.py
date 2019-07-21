@@ -42,4 +42,4 @@ def main():
 
 	print(prediction)
 
-main()
+#main()
